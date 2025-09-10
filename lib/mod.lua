@@ -342,4 +342,4 @@ end
 
 md.hook.register("system_post_startup", "nb_smpkit post startup", smpkit_post_system)
 md.hook.register("script_pre_init", "smpkit pre init", smpkit_pre_init)
-md.hook.register("script_post_cleanup", "sidvagn cleanup", smpkit_cleanup)
+md.hook.register("script_post_cleanup", "smpkit cleanup", smpkit_cleanup)
