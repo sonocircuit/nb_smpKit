@@ -50,6 +50,14 @@ local function pan_display(param)
   end
 end
 
+local function free_buffers()
+  osc.send({ "localhost", 57120 }, "/nb_smpkit/free_buffers")
+end
+
+local function dont_panic()
+  osc.send({ "localhost", 57120 }, "/nb_smpkit/panic")
+end
+
 local function set_main_amp(val)
   osc.send({ "localhost", 57120 }, "/nb_smpkit/set_level", {val})
 end
@@ -112,6 +120,12 @@ local function queue_sample_load(i, path)
   end
 end
 
+local function alloc_buffers()
+  for i = 1, NUM_VOICES do
+    queue_sample_load(i, params:get("nb_smpkit_load_sample_"..i))
+  end
+end
+
 local function save_kit(txt)
   if txt then
     local kit = {}
@@ -132,7 +146,7 @@ end
 
 local function load_kit(path)
   if path ~= "cancel" and path ~= "" and path ~= preset_path then
-    osc.send({ "localhost", 57120 }, "/nb_smpkit/panic")
+    dont_panic()
     if path:match("^.+(%..+)$") == ".kit" then
       local kit = tab.load(path)
       if kit ~= nil then
@@ -287,6 +301,7 @@ function add_smpkit_player()
   function player:active()
     if self.name ~= nil then
       smpkit_is_active = true
+      alloc_buffers()
       params:show("nb_smpkit_group")
       _menu.rebuild_params()
     end
@@ -297,12 +312,12 @@ function add_smpkit_player()
       smpkit_is_active = false
       params:hide("nb_smpkit_group")
       _menu.rebuild_params()
-      osc.send({ "localhost", 57120 }, "/nb_smpkit/free_buffers")
+      free_buffers()
     end
   end
 
   function player:stop_all()
-    osc.send({ "localhost", 57120 }, "/nb_smpkit/panic")
+    dont_panic()
   end
 
   function player:modulate(val)
@@ -369,7 +384,7 @@ local function smpkit_pre_init()
 end
 
 local function smpkit_cleanup()
-  osc.send({ "localhost", 57120 }, "/nb_smpkit/free_buffers")
+  free_buffers()
 end
 
 md.hook.register("system_post_startup", "nb_smpkit post startup", smpkit_post_system)
