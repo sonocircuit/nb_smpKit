@@ -1,4 +1,4 @@
--- nb smpkit v.0.1.0 @sonoCircuit
+-- nb smpkit v.0.2.0 @sonoCircuit
 -- trig ur smpls
 
 local fs = require 'fileselect'
@@ -7,11 +7,11 @@ local mu = require 'musicutil'
 local md = require 'core/mods'
 
 local preset_path = "/home/we/dust/data/nb_smpkit/smpkit_kits"
-local current_kit = ""
 local audio_path = "/home/we/dust/audio/"
+local current_kit = ""
 
 local NUM_VOICES = 12
-local MAX_LENGTH = math.pow(2, 24) -- approx 5.8min @48k (Phasor resolution). go higher? timber does 10min mono...
+local MAX_LENGTH = math.pow(2, 24) -- approx 5.8min @48k (sc phasor resolution)
 
 local smpkit_is_active = false
 local load_queue = {}
@@ -25,15 +25,15 @@ for i = 1, NUM_VOICES do
 end
 
 local p = {
-  load_sample = "", amp = 0.8, pan = 0, send_a = 0, send_b = 0,
-  mode = 0, start = 0, length = 1, rate = 1, rate_slew = 8,
-  lopass_freq = 20000, mid_freq = 1200, mid_amp = 0, hipass_freq = 20
+  load_sample = "", amp = 0.8, pan = 0, dist = 0, send_a = 0, send_b = 0,
+  mode = 0, pitch = 0, tune = 0, dir = 1, rate_slew = 8, start = 0, length = 1, fade_in = 0.01, fade_out = 0.01,
+  lpf_hz = 18000, lpf_rz = 0, eq_freq = 1200, eq_q = 0, eq_amp = 0, hpf_hz = 20, hpf_rz = 20
 }
 
 local paramslist = {
-  "sample", "load_sample", "clear_sample", "levels", "amp", "pan", "send_a", "send_b",
-  "playback", "mode", "start", "length", "rate", "rate_slew",
-  "filters", "lopass_freq", "mid_freq", "mid_amp", "hipass_freq"
+  "load_sample", "clear_sample", "levels", "amp", "pan", "dist", "send_a", "send_b",
+  "playback", "mode", "pitch", "tune", "dir", "rate_slew", "start", "length", "fade_in", "fade_out",
+  "filters", "lpf_hz", "lpf_rz", "eq_freq", "eq_q", "eq_amp", "hpf_hz", "hpf_rz"
 }
 
 local function round_form(param, quant, form)
@@ -48,6 +48,10 @@ local function pan_display(param)
   else
     return "> <"
   end
+end
+
+local function set_main_amp(val)
+  osc.send({ "localhost", 57120 }, "/nb_smpkit/set_level", {val})
 end
 
 local function set_param(i, key, val)
@@ -144,9 +148,6 @@ local function load_kit(path)
         current_kit = name:gsub(".kit", "")
         print("loaded smpkit: "..current_kit)
       else
-        if util.file_exists(failsafe_kit) then
-          load_synth_patch(failsafe_kit)
-        end
         print("error: could not find kit", path)
       end
     else
@@ -160,13 +161,17 @@ local function build_menu(voice)
     local state = voice == i and "show" or "hide"
     for _, v in pairs(paramslist) do
       params[state](params, "nb_smpkit_"..v.."_"..i)
+      if not md.is_loaded("fx") then
+        params:hide("nb_smpkit_send_a_"..i)
+        params:hide("nb_smpkit_send_b_"..i)
+      end
     end
   end
   _menu.rebuild_params()
 end
 
 local function add_smpkit_params()
-  params:add_group("nb_smpkit_group", "smpkit", 6 + 19 * NUM_VOICES)
+  params:add_group("nb_smpkit_group", "smpkit", 8 + 26 * NUM_VOICES)
   params:hide("nb_smpkit_group")
 
   params:add_separator("nb_smpkit_presets", "presets")
@@ -179,15 +184,18 @@ local function add_smpkit_params()
 
   params:add_separator("nb_smpkit_settings", "settings")
 
+  params:add_control("nb_smpkit_main_amp", "main level", controlspec.new(0, 1, "lin", 0, 1), function(param) return round_form(param:get() * 100, 1, "%") end)
+  params:set_action("nb_smpkit_main_amp", function(val) set_main_amp(val) end)
+
   params:add_number("nb_smpkit_root", "root", 0, 11, 0, function(param) return mu.note_num_to_name(param:get()) end)
   params:set_action("nb_smpkit_root", function(val) root_note = val end)
 
-  params:add_number("nb_smpkit_voice", "voice", 1, NUM_VOICES, 1)
-  params:set_action("nb_smpkit_voice", function(voice) build_menu(voice) end)
+  params:add_separator("nb_smpkit_voice", "smpkit voice")
+
+  params:add_number("nb_smpkit_focus", "selected voice", 1, NUM_VOICES, 1)
+  params:set_action("nb_smpkit_focus", function(voice) build_menu(voice) end)
 
   for i = 1, NUM_VOICES do
-    params:add_separator("nb_smpkit_sample_"..i, "sample "..i)
-
     params:add_file("nb_smpkit_load_sample_"..i, "load", audio_path)
     params:set_action("nb_smpkit_load_sample_"..i, function(path) queue_sample_load(i, path) end)
 
@@ -202,8 +210,11 @@ local function add_smpkit_params()
 
     params:add_separator("nb_smpkit_levels_"..i, "levels")
 
-    params:add_control("nb_smpkit_amp_"..i, "amp", controlspec.new(0, 1, "lin", 0, 0.8), function(param) return round_form(param:get() * 100, 1, "%") end)
+    params:add_control("nb_smpkit_amp_"..i, "level", controlspec.new(0, 1, "lin", 0, 0.8), function(param) return round_form(param:get() * 100, 1, "%") end)
     params:set_action("nb_smpkit_amp_"..i, function(val) set_param(i, 'amp', val) end)
+
+    params:add_control("nb_smpkit_dist_"..i, "drive", controlspec.new(0, 1, "lin", 0, 0), function(param) return round_form(param:get() * 100, 1, "%") end)
+    params:set_action("nb_smpkit_dist_"..i, function(val) set_param(i, 'dist', val) end)
 
     params:add_control("nb_smpkit_pan_"..i, "pan", controlspec.new(-1, 1, "lin", 0, 0), function(param) return pan_display(param:get()) end)
     params:set_action("nb_smpkit_pan_"..i, function(val) set_param(i, 'pan', val) end)
@@ -219,33 +230,56 @@ local function add_smpkit_params()
     params:add_option("nb_smpkit_mode_"..i, "mode", {"oneshot", "hold", "toggle"}, 1)
     params:set_action("nb_smpkit_mode_"..i, function(val) set_param(i, 'mode', val == 1 and 0 or 1) play_mode[i] = val end)
 
-    params:add_control("nb_smpkit_start_"..i, "start", controlspec.new(0, 1, "lin", 0, 0), function(param) return round_form(param:get() * 100, 0.1, "%") end)
-    params:set_action("nb_smpkit_start_"..i, function(val) set_param(i, 'srtRel', val) clamp_loop(i, 'start') end)
+    params:add_number("nb_smpkit_pitch_"..i, "pitch", -24, 24, 0, function(param) local val = param:get() return val.."st" end)
+    params:set_action("nb_smpkit_pitch_"..i, function(val) set_param(i, 'pitch', val) end)
 
-    params:add_control("nb_smpkit_length_"..i, "length", controlspec.new(0, 1, "lin", 0, 1), function(param) return round_form(param:get() * 100, 0.1, "%") end)
-    params:set_action("nb_smpkit_length_"..i, function(val) set_param(i, 'lenRel', val) clamp_loop(i, 'length') end)
+    params:add_number("nb_smpkit_tune_"..i, "tune", -100, 100, 0, function(param) local val = param:get() return val.."cent" end)
+    params:set_action("nb_smpkit_tune_"..i, function(val) set_param(i, 'tune', val) end)
 
-    params:add_control("nb_smpkit_rate_"..i, "rate", controlspec.new(-2, 2, "lin", 0, 1), function(param) return round_form(param:get() * 100, 1, "%") end)
-    params:set_action("nb_smpkit_rate_"..i, function(val) set_param(i, 'rate', val) end)
+    params:add_option("nb_smpkit_dir_"..i, "direction", {"rev", "fwd"}, 2)
+    params:set_action("nb_smpkit_dir_"..i, function(val) set_param(i, 'plyDir', val == 1 and -1 or 1) end)
 
     params:add_control("nb_smpkit_rate_slew_"..i, "rate slew", controlspec.new(0, 2, "lin", 0, 0), function(param) return round_form(param:get(), 0.01, "s") end)
     params:set_action("nb_smpkit_rate_slew_"..i, function(val) set_param(i, 'rateSlew', val) end)
 
+    params:add_control("nb_smpkit_start_"..i, "start", controlspec.new(0, 1, "lin", 0, 0), function(param) return round_form(param:get() * 100, 0.1, "%") end)
+    params:set_action("nb_smpkit_start_"..i, function(val) set_param(i, 'srtRel', val) end) --clamp_loop(i, 'start')
+
+    params:add_control("nb_smpkit_length_"..i, "length", controlspec.new(0, 1, "lin", 0, 1), function(param) return round_form(param:get() * 100, 0.1, "%") end)
+    params:set_action("nb_smpkit_length_"..i, function(val) set_param(i, 'lenRel', val) end) --clamp_loop(i, 'length')
+
+    params:add_control("nb_smpkit_fade_in_"..i, "fade in", controlspec.new(0.01, 2, "lin", 0, 0), function(param) return round_form(param:get(), 0.01, "s") end)
+    params:set_action("nb_smpkit_fade_in_"..i, function(val) set_param(i, 'fadeIn', val) end)
+
+    params:add_control("nb_smpkit_fade_out_"..i, "fade out", controlspec.new(0.01, 2, "lin", 0, 0), function(param) return round_form(param:get(), 0.01, "s") end)
+    params:set_action("nb_smpkit_fade_out_"..i, function(val) set_param(i, 'fadeOut', val) end)
+
     params:add_separator("nb_smpkit_filters_"..i, "filters")
 
-    params:add_control("nb_smpkit_lopass_freq_"..i, "lpf", controlspec.new(60, 20000, "exp", 0, 20000), function(param) return round_form(param:get(), 1, "hz") end)
-    params:set_action("nb_smpkit_lopass_freq_"..i, function(val) set_param(i, 'loFreq', val) end)
+    params:add_control("nb_smpkit_lpf_hz_"..i, "lpf cutoff", controlspec.new(60, 20000, "exp", 0, 20000), function(param) return round_form(param:get(), 1, "hz") end)
+    params:set_action("nb_smpkit_lpf_hz_"..i, function(val) set_param(i, 'lpfHz', val) end)
 
-    params:add_control("nb_smpkit_mid_freq_"..i, "mid freq", controlspec.new(120, 12000, "exp", 0, 1200), function(param) return round_form(param:get(), 1, "hz") end)
-    params:set_action("nb_smpkit_mid_freq_"..i, function(val) set_param(i, 'midFreq', val) end)
+    params:add_control("nb_smpkit_lpf_rz_"..i, "lpf resonance", controlspec.new(0, 1, "lin", 0, 0.2), function(param) return round_form(param:get() * 100, 1, "%") end)
+    params:set_action("nb_smpkit_lpf_rz_"..i, function(val) set_param(i, 'lpfRz', val) end)
 
-    params:add_control("nb_smpkit_mid_amp_"..i, "mid amp", controlspec.new(-18, 18, "lin", 0, 0), function(param) return round_form(param:get(), 1, "dB") end)
-    params:set_action("nb_smpkit_mid_amp_"..i, function(val) set_param(i, 'midAmp', val) end)
+    params:add_control("nb_smpkit_eq_freq_"..i, "eq freq", controlspec.new(120, 12000, "exp", 0, 1200), function(param) return round_form(param:get(), 1, "hz") end)
+    params:set_action("nb_smpkit_eq_freq_"..i, function(val) set_param(i, 'eqHz', val) end)
 
-    params:add_control("nb_smpkit_hipass_freq_"..i, "hpf", controlspec.new(20, 8000, "exp", 0, 20), function(param) return round_form(param:get(), 1, "hz") end)
-    params:set_action("nb_smpkit_hipass_freq_"..i, function(val) set_param(i, 'hiFreq', val) end)
+    params:add_control("nb_smpkit_eq_q_"..i, "eq q", controlspec.new(0, 1, "lin", 0, 0.2), function(param) return round_form(param:get() * 100, 1, "%") end)
+    params:set_action("nb_smpkit_eq_q_"..i, function(val) set_param(i, 'eqQ', val) end)
+
+    params:add_control("nb_smpkit_eq_amp_"..i, "eq amp", controlspec.new(-12, 12, "lin", 0, 0), function(param) return round_form(param:get(), 1, "dB") end)
+    params:set_action("nb_smpkit_eq_amp_"..i, function(val) set_param(i, 'eqAmp', val) end)
+
+    params:add_control("nb_smpkit_hpf_hz_"..i, "hpf cutoff", controlspec.new(20, 8000, "exp", 0, 20), function(param) return round_form(param:get(), 1, "hz") end)
+    params:set_action("nb_smpkit_hpf_hz_"..i, function(val) set_param(i, 'hpfHz', val) end)
+
+    params:add_control("nb_smpkit_hpf_rz_"..i, "hpf resonance", controlspec.new(0, 1, "lin", 0, 0.2), function(param) return round_form(param:get() * 100, 1, "%") end)
+    params:set_action("nb_smpkit_hpf_rz_"..i, function(val) set_param(i, 'hpfRz', val) end)
   end
 end
+
+--------------------------- nb player ---------------------------
 
 function add_smpkit_player()
   local player = {}
@@ -254,10 +288,6 @@ function add_smpkit_player()
     if self.name ~= nil then
       smpkit_is_active = true
       params:show("nb_smpkit_group")
-      if md.is_loaded("fx") == false then
-        params:hide("nb_smpkit_send_a")
-        params:hide("nb_smpkit_send_b")
-      end
       _menu.rebuild_params()
     end
   end
@@ -299,7 +329,7 @@ function add_smpkit_player()
     local vox = ((note - root_note) % NUM_VOICES)
     local i = vox + 1
     if is_playing[i] and play_mode[i] == 3 then
-      osc.send({ "localhost", 57120 }, "/nb_smpkit/stop", {vox, vel})
+      osc.send({ "localhost", 57120 }, "/nb_smpkit/stop", {vox})
       is_playing[i] = false
     else
       osc.send({ "localhost", 57120 }, "/nb_smpkit/trig", {vox, vel})
@@ -326,6 +356,8 @@ function add_smpkit_player()
   note_players["smpkit"] = player
 end
 
+--------------------------- mod zone ---------------------------
+
 local function smpkit_post_system()
   if util.file_exists(preset_path) == false then
     util.make_dir(preset_path)
@@ -341,5 +373,5 @@ local function smpkit_cleanup()
 end
 
 md.hook.register("system_post_startup", "nb_smpkit post startup", smpkit_post_system)
-md.hook.register("script_pre_init", "smpkit pre init", smpkit_pre_init)
-md.hook.register("script_post_cleanup", "smpkit cleanup", smpkit_cleanup)
+md.hook.register("script_pre_init", "nb_smpkit pre init", smpkit_pre_init)
+md.hook.register("script_post_cleanup", "nb_smpkit cleanup", smpkit_cleanup)
