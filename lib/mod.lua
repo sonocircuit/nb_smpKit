@@ -374,7 +374,7 @@ function add_smpkit_player()
         clock.cancel(self.clk)
       end
       self.clk = clock.run(function()
-        clock.sleep(0.4)
+        clock.sleep(0.2)
         if not is_active then
           is_active = true
           alloc_buffers()
@@ -391,7 +391,7 @@ function add_smpkit_player()
         clock.cancel(self.clk)
       end
       self.clk = clock.run(function()
-        clock.sleep(0.4)
+        clock.sleep(0.2)
         if is_active then
           is_active = false
           dont_panic()
