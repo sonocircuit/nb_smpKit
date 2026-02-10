@@ -9,7 +9,7 @@ NB_smpKit {
 
 		if (kitGroup.isNil) {
 
-			kitGroup = ParGroup.new(Server.default);
+			kitGroup = Group.new(Server.default);
 
 			SynthDef(\smpkit_mono,{
 				arg out, sendABus, sendBBus,
