@@ -93,7 +93,7 @@ NB_smpKit {
 				arg out, sendABus, sendBBus,
 				mainAmp = 1, vel = 1, amp = 1, pan = 0, dist = 0, sendA = 0, sendB = 0, gate = 1, mode = 0, bfr = 0,
 				pitch = 0, tune = 0, oct = 0, plyDir = 0, rateSlew = 0.2, srtRel = 0, lenRel = 1, fadeIn = 0.01, fadeOut = 0.01,
-				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 220, hpfRz = 0;
+				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 20, hpfRz = 0;
 
 				var rate, numFrames, srtFrame, endFrame, endRel, envOne, envHld, envAmp, sDur, phasePos;
 				var att, boost, snd, lpfQ, hpfQ, duckFrames, duckGate, envDuck, duckTime = 0.01;
