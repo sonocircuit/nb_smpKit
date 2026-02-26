@@ -228,7 +228,7 @@ NB_smpKit {
 					\eqHz, 1200,
 					\eqQ, 0,
 					\eqAmp, 0,
-					\hpfHz, 220,
+					\hpfHz, 20,
 					\hpfRz, 0,
 				]);
 			});
