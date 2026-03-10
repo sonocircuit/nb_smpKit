@@ -1,4 +1,4 @@
-// smpKit v1.0 - nb voice to play ur smpls - @sonoCircuit
+// smpKit v1.1 - nb voice to play ur smpls - @sonoCircuit
 
 NB_smpKit {
 
@@ -11,11 +11,14 @@ NB_smpKit {
 
 			kitGroup = Group.new(Server.default);
 
-			SynthDef(\smpkit_mono,{
+			SynthDef(\smpkit_mono, {
 				arg out, sendABus, sendBBus,
-				mainAmp = 1, vel = 1, amp = 1, pan = 0, dist = 0, sendA = 0, sendB = 0, gate = 1, mode = 0, bfr = 0,
-				pitch = 0, tune = 0, oct = 0, plyDir = 0, rateSlew = 0.2, srtRel = 0, lenRel = 1, fadeIn = 0.01, fadeOut = 0.01,
-				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 20, hpfRz = 0;
+				mainAmp = 1, vel = 1, amp = 1, pan = 0, dist = 0, sendA = 0, sendB = 0,
+				gate = 1, mode = 0, bfr = 0, bndAmt = 1, bndDepth = 0,
+				pitch = 0, tune = 0, oct = 0, plyDir = 0, rateSlew = 0.2,
+				srtRel = 0, lenRel = 1, fadeIn = 0.01, fadeOut = 0.01,
+				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 20, hpfRz = 0,
+				modDepth = 0, distMod = 0, lpfHzMod = 0, hpfHzMod = 0, sendAMod = 0, sendBMod = 0;
 
 				var rate, numFrames, srtFrame, endFrame, endRel, envOne, envHld, envAmp, sDur, phasePos;
 				var att, boost, snd, lpfQ, hpfQ, duckFrames, duckGate, envDuck, duckTime = 0.01;
@@ -27,8 +30,8 @@ NB_smpKit {
 				fadeIn = fadeIn.clip(0.01, 2);
 				fadeOut = fadeOut.clip(0.01, 2);
 
-				lpfHz = Lag.kr(lpfHz).clip(20, 20000);
-				hpfHz = Lag.kr(hpfHz).clip(20, 20000);
+				lpfHz = Lag.kr(lpfHz.cpsmidi + (lpfHzMod * modDepth * 127)).midicps.clip(20, 20000);
+				hpfHz = Lag.kr(hpfHz.cpsmidi + (hpfHzMod * modDepth * 127)).midicps.clip(20, 20000);
 				lpfQ = Lag.kr(lpfRz.linlin(0, 1, 1, 0.1));
 				hpfQ = Lag.kr(hpfRz.linlin(0, 1, 1, 0.1));
 
@@ -38,16 +41,16 @@ NB_smpKit {
 
 				amp = Lag.kr(amp);
 				pan = Lag.kr(pan);
-				sendA = Lag.kr(sendA);
-				sendB = Lag.kr(sendB);
+				sendA = Lag.kr(sendA + (sendAMod * modDepth)).clip(0, 1);
+				sendB = Lag.kr(sendB + (sendBMod * modDepth)).clip(0, 1);
 
-				dist = Lag.kr(dist).clip(0, 1);
+				dist = Lag.kr(dist + (distMod * modDepth)).clip(0, 1);
 				boost = dist.linlin(0, 1, 12, 24);
 				att = dist.linlin(0, 1, 0, -8);
 
 				// frame math
 				plyDir = Select.kr(plyDir < 0, [1, -1]);
-				rate = Lag3.kr((pitch + tune + (oct * 12)).midiratio * BufRateScale.kr(bfr) * plyDir, rateSlew);
+				rate = Lag.kr((pitch + tune + (oct * 12) + (bndAmt * bndDepth)).midiratio * BufRateScale.kr(bfr) * plyDir, rateSlew);
 				endRel = (srtRel + lenRel).clip(0.01, 1);
 				numFrames = BufFrames.ir(bfr);
 				srtFrame = numFrames * Select.kr(rate > 0, [endRel, srtRel]);
@@ -89,11 +92,14 @@ NB_smpKit {
 				Out.ar(sendBBus, snd * sendB);
 			}).add;
 
-			SynthDef(\smpkit_stereo,{
+			SynthDef(\smpkit_stereo, {
 				arg out, sendABus, sendBBus,
-				mainAmp = 1, vel = 1, amp = 1, pan = 0, dist = 0, sendA = 0, sendB = 0, gate = 1, mode = 0, bfr = 0,
-				pitch = 0, tune = 0, oct = 0, plyDir = 0, rateSlew = 0.2, srtRel = 0, lenRel = 1, fadeIn = 0.01, fadeOut = 0.01,
-				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 20, hpfRz = 0;
+				mainAmp = 1, vel = 1, amp = 1, pan = 0, dist = 0, sendA = 0, sendB = 0,
+				gate = 1, mode = 0, bfr = 0, bndAmt = 1, bndDepth = 0,
+				pitch = 0, tune = 0, oct = 0, plyDir = 0, rateSlew = 0.2,
+				srtRel = 0, lenRel = 1, fadeIn = 0.01, fadeOut = 0.01,
+				lpfHz = 20000, lpfRz = 0, eqHz = 1200, eqQ = 0, eqAmp = 0, hpfHz = 20, hpfRz = 0,
+				modDepth = 0, distMod = 0, lpfHzMod = 0, hpfHzMod = 0, sendAMod = 0, sendBMod = 0;
 
 				var rate, numFrames, srtFrame, endFrame, endRel, envOne, envHld, envAmp, sDur, phasePos;
 				var att, boost, snd, lpfQ, hpfQ, duckFrames, duckGate, envDuck, duckTime = 0.01;
@@ -105,8 +111,8 @@ NB_smpKit {
 				fadeIn = fadeIn.clip(0.01, 2);
 				fadeOut = fadeOut.clip(0.01, 2);
 
-				lpfHz = Lag.kr(lpfHz).clip(20, 20000);
-				hpfHz = Lag.kr(hpfHz).clip(20, 20000);
+				lpfHz = Lag.kr(lpfHz.cpsmidi + (lpfHzMod * modDepth * 127)).midicps.clip(20, 20000);
+				hpfHz = Lag.kr(hpfHz.cpsmidi + (hpfHzMod * modDepth * 127)).midicps.clip(20, 20000);
 				lpfQ = Lag.kr(lpfRz.linlin(0, 1, 1, 0.1));
 				hpfQ = Lag.kr(hpfRz.linlin(0, 1, 1, 0.1));
 
@@ -116,16 +122,16 @@ NB_smpKit {
 
 				amp = Lag.kr(amp);
 				pan = Lag.kr(pan);
-				sendA = Lag.kr(sendA);
-				sendB = Lag.kr(sendB);
+				sendA = Lag.kr(sendA + (sendAMod * modDepth)).clip(0, 1);
+				sendB = Lag.kr(sendB + (sendBMod * modDepth)).clip(0, 1);
 
-				dist = Lag.kr(dist).clip(0, 1);
+				dist = Lag.kr(dist + (distMod * modDepth)).clip(0, 1);
 				boost = dist.linlin(0, 1, 12, 24);
 				att = dist.linlin(0, 1, 0, -8);
 
 				// frame math
 				plyDir = Select.kr(plyDir < 0, [1, -1]);
-				rate = Lag3.kr((pitch + tune + (oct * 12)).midiratio * BufRateScale.kr(bfr) * plyDir, rateSlew);
+				rate = Lag.kr((pitch + tune + (oct * 12) + (bndAmt * bndDepth)).midiratio * BufRateScale.kr(bfr) * plyDir, rateSlew);
 				endRel = (srtRel + lenRel).clip(0.01, 1);
 				numFrames = BufFrames.ir(bfr);
 				srtFrame = numFrames * Select.kr(rate > 0, [endRel, srtRel]);
@@ -230,6 +236,14 @@ NB_smpKit {
 					\eqAmp, 0,
 					\hpfHz, 20,
 					\hpfRz, 0,
+					\modDepth, 0,
+					\bndAmt, 1,
+					\bndDepth, 0,
+					\distMod, 0,
+					\lpfHzMod, 0,
+					\hpfHzMod, 0,
+					\sendAMod, 0,
+					\sendBMod, 0
 				]);
 			});
 
@@ -248,7 +262,6 @@ NB_smpKit {
 			OSCFunc.new({ |msg|
 				var vox = msg[1].asInteger;
 				var vel = msg[2].asFloat;
-				var oct = msg[3].asFloat;
 				var syn;
 				if (kitBuffers[vox].notNil) {
 					var def = if (kitBuffers[vox].numChannels > 1) {\smpkit_stereo} {\smpkit_mono};
@@ -257,7 +270,6 @@ NB_smpKit {
 						[
 							\bfr, kitBuffers[vox],
 							\vel, vel,
-							\oct, oct,
 							\sendABus, ~sendA ? Server.default.outputBus,
 							\sendBBus, ~sendB ? Server.default.outputBus,
 						] ++ voiceParams[vox].getPairs, target: kitGroup
@@ -269,6 +281,29 @@ NB_smpKit {
 
 			OSCFunc.new({ |msg|
 				var vox = msg[1].asInteger;
+				var buf = msg[2].asInteger;
+				var oct = msg[3].asInteger;
+				var vel = msg[4].asFloat;
+				var syn;
+				if (kitBuffers[buf].notNil) {
+					var def = if (kitBuffers[buf].numChannels > 1) {\smpkit_stereo} {\smpkit_mono};
+					if (kitVoices[vox].notNil) { kitVoices[vox].set(\gate, -1.05) };
+					syn = Synth.new(def,
+						[
+							\bfr, kitBuffers[buf],
+							\vel, vel,
+							\oct, oct,
+							\sendABus, ~sendA ? Server.default.outputBus,
+							\sendBBus, ~sendB ? Server.default.outputBus,
+						] ++ voiceParams[vox].getPairs, target: kitGroup
+					);
+					kitVoices[vox] = syn;
+					syn.onFree({ if (kitVoices[vox] === syn) {kitVoices[vox] = nil} });
+				};
+			}, "/nb_smpkit/play");
+
+			OSCFunc.new({ |msg|
+				var vox = msg[1].asInteger;
 				if (kitVoices[vox].notNil) { kitVoices[vox].set(\gate, 0) }
 			}, "/nb_smpkit/stop");
 
@@ -277,14 +312,15 @@ NB_smpKit {
 			}, "/nb_smpkit/panic");
 
 			OSCFunc.new({ |msg|
-				var val = msg[1].asFloat;
+				var key = msg[1].asSymbol;
+				var val = msg[2].asFloat;
 				if (kitGroup.notNil) {
-					kitGroup.set(\mainAmp, val);
+					kitGroup.set(key, val);
 				};
 				numVoices.do({ |vox|
-					voiceParams[vox][\mainAmp] = val;
+					voiceParams[vox][key] = val;
 				});
-			}, "/nb_smpkit/set_level");
+			}, "/nb_smpkit/set_glb_param");
 
 			OSCFunc.new({ |msg|
 				var vox = msg[1].asInteger;
@@ -324,7 +360,7 @@ NB_smpKit {
 					NB_smpKit.clearSample(vox)
 				});
 				kitGroup.free;
-				"smpkit freed".postln;
+				"smpkit removed".postln;
 			}, "/nb_smpkit/free_all");
 
 		}
